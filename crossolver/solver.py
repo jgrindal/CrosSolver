@@ -15,15 +15,25 @@ class Constraint:
     a = (None, None)
     d = (None, None)
 
-    def __init__(self, a_word, a_pos, d_word, d_pos):
-        a = (a_word, a_pos)
-        d = (d_word, d_pos)
+    def __init__(self, a_tuple, d_tuple):
+        self.a = a_tuple
+        self.d = d_tuple
+
+    def __eq__(self, other):
+        if not isinstance(self, other.__class__):
+            return False
+        if self.a == other.a and self.d == other.d:
+            return True
 
     def satisfied(self):
-        if self.a[0].value(self.a[1]) == self.b[0].value(self.b[1]):
+        if self.a[0].value(self.a[1]) == self.d[0].value(self.d[1]):
             return True
         else:
             return False
+
+    def __str__(self):
+        return str(self.a[0].num) + self.a[0].ad + '-' + str(self.a[1]) + ' and ' + str(self.d[0].num) + self.d[0].ad + '-' + str(self.d[1])
+
 
 class Variable:
     def __init__(self, num, ad, length, y, x):
@@ -43,9 +53,16 @@ class Variable:
         self.value = " " * length
 
     def set_domain(self, dictionary):
-        for poss in dictionary:
-            if len(poss) == self.length:
-                self.domain.append(poss)
+        self.domain = [possible for possible in dictionary if len(possible) == self.length]
+
+    def __str__(self):
+        return str(self.num) + ' ' + self.ad + ': ' + str(self.length) + ' long.  May be: ' + str(self.domain)
+
+    def __eq__(self, other):
+        if not isinstance(self, other.__class__):
+            return False
+        if (self.num == other.num) and (self.ad == other.ad) and (self.length == other.length):
+            return True
 
 
 class Solver:
@@ -66,7 +83,7 @@ class Solver:
             print_list(self.puzzle)
         self.wordlist = Wordlist()
         self.gen_list()
-        self.gen_constraints()
+        self.gen_constraints(self.variables)
 
     def gen_list(self):
         """
@@ -74,8 +91,8 @@ class Solver:
         :return:
         """
         count = 0
-        for y in range(1, len(self.puzzle)-1):
-            for x in range(1, len(self.puzzle[0])-1):
+        for y in range(1, len(self.puzzle) - 1):
+            for x in range(1, len(self.puzzle[0]) - 1):
                 a_start = False
                 d_start = False
                 if self.puzzle[y][x] == SPACE and self.puzzle[y][x + 1] == SPACE and self.puzzle[y][x - 1] != SPACE:
@@ -96,32 +113,32 @@ class Solver:
                         length += 1
                     self.variables.append(Variable(count, 'D', length, y, x))
         for variable in self.variables:
-            pass
-            # variable.set_domain(self.wordlist)
+            variable.set_domain(self.wordlist)
 
-    def gen_constraints(self):
+    @staticmethod
+    def gen_constraints(variables):
         """
-        Generate list of constraints for the variables
-        :return:
+        Generate a list of constraints based on the coordinate intersection of the provided variables
+        :param variables: List of variables to be evaluated for intersection
+        :return: List of constraints in the form of [((variable, position),(variable, position)), ... ]
         """
         intersections = defaultdict(list)
-        for variable in self.variables:
+        for variable in variables:
             for i, space in enumerate(variable.spaces):
-                intersections[space].append((variable,i))
-        constraints = [occurances for occurances in intersections.values() if len(occurances) > 1]
+                intersections[space].append((variable, i))
+        constraints = [Constraint(intsct[0], intsct[1]) for intsct in intersections.values() if len(intsct) > 1]
         return constraints
 
 
-
-class Wordlist:
+class Wordlist(list):
     """
     Wordlist holds the dictionary to be applied to the puzzle
     """
 
-    def __init__(self, dict_path='../datafiles/dictionary'):
+    def __init__(self, dict_path='../datafiles/dic'):
         with open(dict_path, 'r') as dict_file:
             dictionary = [line.strip() for line in dict_file]
-        print(dictionary)
+        list.__init__(self, dictionary)
 
 
 if __name__ == "__main__":
