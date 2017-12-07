@@ -12,12 +12,16 @@ def print_list(toPrint):
 
 
 class Constraint:
-    a = (None, None)
-    d = (None, None)
+    a = (None, 0)
+    d = (None, 0)
 
     def __init__(self, a_tuple, d_tuple):
-        self.a = a_tuple
-        self.d = d_tuple
+        if a_tuple[0].ad == 'A':
+            self.a = a_tuple
+            self.d = d_tuple
+        else:
+            self.a = d_tuple
+            self.d = a_tuple
 
     def __eq__(self, other):
         if not isinstance(self, other.__class__):
@@ -26,10 +30,18 @@ class Constraint:
             return True
 
     def satisfied(self):
-        if self.a[0].value(self.a[1]) == self.d[0].value(self.d[1]):
-            return True
+        return self.a[0].value[self.a[1]] == self.d[0].value[self.d[1]]
+
+    def contains(self, var):
+        return self.a[0] == var or self.d[0] == var
+
+    def other(self, var):
+        if self.a[0] == var:
+            return self.d[0]
+        elif self.d[0] == var:
+            return self.a[0]
         else:
-            return False
+            return None
 
     def __str__(self):
         return str(self.a[0].num) + self.a[0].ad + '-' + str(self.a[1]) + ' and ' + str(self.d[0].num) + self.d[0].ad + '-' + str(self.d[1])
@@ -55,8 +67,18 @@ class Variable:
     def set_domain(self, dictionary):
         self.domain = [possible for possible in dictionary if len(possible) == self.length]
 
+    def set_val(self):
+        self.value = random.choice(self.domain)
+
+    def reset_val(self):
+        self.domain.remove(self.value)
+        self.set_val()
+
+    def rem_val(self, val):
+        self.domain.remove(val)
+
     def __str__(self):
-        return str(self.num) + ' ' + self.ad + ': ' + str(self.length) + ' long.  May be: ' + str(self.domain)
+        return str(self.num) + ' ' + self.ad + ': ' + str(self.length) + ' long.  Value: ' + str(self.value) + '. Possibles: ' + str(self.domain)
 
     def __eq__(self, other):
         if not isinstance(self, other.__class__):
@@ -83,7 +105,9 @@ class Solver:
             print_list(self.puzzle)
         self.wordlist = Wordlist()
         self.gen_list()
-        self.gen_constraints(self.variables)
+        self.ac3()
+        for var in self.variables:
+            print(var)
 
     def gen_list(self):
         """
@@ -112,8 +136,7 @@ class Solver:
                     while self.puzzle[y + length][x] != BLOCK:
                         length += 1
                     self.variables.append(Variable(count, 'D', length, y, x))
-        for variable in self.variables:
-            variable.set_domain(self.wordlist)
+
 
     @staticmethod
     def gen_constraints(variables):
@@ -128,6 +151,30 @@ class Solver:
                 intersections[space].append((variable, i))
         constraints = [Constraint(intsct[0], intsct[1]) for intsct in intersections.values() if len(intsct) > 1]
         return constraints
+
+    def ac3(self):
+        cont = True
+        for variable in self.variables:
+            variable.set_domain(self.wordlist)
+        worklist = self.gen_constraints(self.variables)
+        while len(worklist) > 0:
+            constraint = worklist.pop()
+            if self.arc_reduce(constraint):
+                if len(constraint.a[0].domain) == 0:
+                    print("no viable solution")
+                    return
+
+
+    def arc_reduce(self, constraint):
+        change = False
+        for val in constraint.a[0].domain:
+            possibles = [vy for vy in constraint.d[0].domain if vy[constraint.d[1]] == val[constraint.a[1]]]
+            if len(possibles) == 0:
+                constraint.a[0].rem_val(val)
+                change = True
+        return change
+
+
 
 
 class Wordlist(list):
