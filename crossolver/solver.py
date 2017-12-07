@@ -1,6 +1,8 @@
 import random
 from collections import defaultdict
 
+import time
+
 SPACE = 'O'
 BLOCK = 'X'
 
@@ -16,12 +18,8 @@ class Constraint:
     d = (None, 0)
 
     def __init__(self, a_tuple, d_tuple):
-        if a_tuple[0].ad == 'A':
-            self.a = a_tuple
-            self.d = d_tuple
-        else:
-            self.a = d_tuple
-            self.d = a_tuple
+        self.a = a_tuple
+        self.d = d_tuple
 
     def __eq__(self, other):
         if not isinstance(self, other.__class__):
@@ -42,6 +40,9 @@ class Constraint:
             return self.a[0]
         else:
             return None
+
+    def flip(self):
+        return Constraint(self.d, self.a)
 
     def __str__(self):
         return str(self.a[0].num) + self.a[0].ad + '-' + str(self.a[1]) + ' and ' + str(self.d[0].num) + self.d[0].ad + '-' + str(self.d[1])
@@ -105,7 +106,12 @@ class Solver:
             print_list(self.puzzle)
         self.wordlist = Wordlist()
         self.gen_list()
+        self.constraints = self.gen_constraints(self.variables)
+        self.constraints += [constraint.flip() for constraint in self.constraints]
+        start = time.time()
         self.ac3()
+        stop = time.time()
+        print(stop-start)
         for var in self.variables:
             print(var)
 
@@ -153,24 +159,38 @@ class Solver:
         return constraints
 
     def ac3(self):
-        cont = True
+        """
+        Pares all variable domains such that all constraints are arc consistent, or notes that the given variables
+        cannot be evaluated with their domains (no solution)
+        :return: False if "No Solution:, True if reduced
+        """
         for variable in self.variables:
             variable.set_domain(self.wordlist)
         worklist = self.gen_constraints(self.variables)
+        worklist = worklist + [flip.flip() for flip in worklist]
         while len(worklist) > 0:
-            constraint = worklist.pop()
-            if self.arc_reduce(constraint):
-                if len(constraint.a[0].domain) == 0:
+            constraint = worklist.pop(random.randint(0, len(worklist)-1))
+            if self.arc_reduce(constraint):  # if a-value of constraint domain changed
+                if len(constraint.a[0].domain) == 0:  # if there are no possible values, there's no solution
                     print("no viable solution")
-                    return
+                    return False
+                else:
+                    look_again = [reval for reval in self.constraints if reval.contains(constraint.a[0])]
+                    worklist += look_again # TODO: Check for duplicate constraint evaluations?
+        return True
 
 
     def arc_reduce(self, constraint):
+        """
+        Reduces the a-variable of the constraint such that the constraint (arc) is consistent
+        :param constraint:
+        :return:
+        """
         change = False
-        for val in constraint.a[0].domain:
-            possibles = [vy for vy in constraint.d[0].domain if vy[constraint.d[1]] == val[constraint.a[1]]]
+        for vx in constraint.a[0].domain:
+            possibles = [vy for vy in constraint.d[0].domain if vy[constraint.d[1]] == vx[constraint.a[1]]]
             if len(possibles) == 0:
-                constraint.a[0].rem_val(val)
+                constraint.a[0].rem_val(vx)
                 change = True
         return change
 
