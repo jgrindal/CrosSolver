@@ -1,6 +1,8 @@
 import random
 from collections import defaultdict
 
+import time
+
 SPACE = 'O'
 BLOCK = 'X'
 
@@ -23,6 +25,10 @@ class Constraint:
         if self.a == other.a and self.d == other.d:
             return True
 
+    def __str__(self):
+        return str(self.a[0].num) + self.a[0].ad + '-' + str(self.a[1]) + ' and ' + str(self.d[0].num) + self.d[
+            0].ad + '-' + str(self.d[1])
+
     def satisfied(self):
         """
         Returns True if satisfied, False if not satisfied
@@ -30,13 +36,18 @@ class Constraint:
         """
         return self.a[0].value[self.a[1]] == self.d[0].value[self.d[1]]
 
-    def contains(self, var):
+    def contains(self, var, pos=None):
         """
         Evaluates whether the constraint contains a particular variable
         :param var: Variable to check
         :return: True if var is present, False if it is not
         """
-        return self.a[0] == var or self.d[0] == var
+        if pos == None:
+            return self.a[0] == var or self.d[0] == var
+        elif pos == 'A':
+            return self.a[0] == var
+        elif pos == 'D':
+            return self.d[0] == var
 
     def flip(self):
         """
@@ -44,10 +55,6 @@ class Constraint:
         :return: Constraint with opposite a and d tuples
         """
         return Constraint(self.d, self.a)
-
-    def __str__(self):
-        return str(self.a[0].num) + self.a[0].ad + '-' + str(self.a[1]) + ' and ' + str(self.d[0].num) + self.d[
-            0].ad + '-' + str(self.d[1])
 
 
 class Variable:
@@ -82,19 +89,25 @@ class Variable:
         """
         self.domain = [possible for possible in dictionary if len(possible) == self.length]
 
-    def set_val(self):
+    def set_val(self, constraints=None):
         """
         Sets the value to a random value in the domain set
         :return:
         """
-        self.value = random.choice(self.domain)
+        if constraints == None:
+            self.value = random.choice(self.domain)
+        else:
+            possibles = self.domain
+            for constraint in constraints:
+                possibles = [poss for poss in possibles if constraint.d[0].value[constraint.d[1]] == poss[
+                    constraint.a[1]]]  # TODO: Refactor this
+            self.value = random.choice(possibles)
 
     def reset_val(self):
         """
         Removes the current value from the domain and sets a different value
         :return:
         """
-        self.domain.remove(self.value)
         self.set_val()
 
     def rem_val(self, val):
@@ -106,8 +119,7 @@ class Variable:
         self.domain.remove(val)
 
     def __str__(self):
-        return str(self.num) + ' ' + self.ad + ': ' + str(self.length) + ' long.  Value: ' + str(
-            self.value) + '. Possibles: ' + str(self.domain)
+        return str(self.num) + '' + self.ad + ': \t' + str(self.length)  + '  \t Possibles: ' + str(len(self.domain))
 
     def __eq__(self, other):
         if not isinstance(self, other.__class__):
@@ -163,6 +175,8 @@ class Solver:
                     while self.puzzle[y + length][x] != BLOCK:
                         length += 1
                     self.variables.append(Variable(count, 'D', length, y, x))
+        for variable in self.variables:
+            variable.set_domain(self.wordlist)
 
     @staticmethod
     def gen_constraints(variables):
@@ -199,7 +213,8 @@ class Solver:
                     worklist += look_again  # TODO: Check for duplicate constraint evaluations?
         return True
 
-    def arc_reduce(self, constraint):
+    @staticmethod
+    def arc_reduce(constraint):
         """
         Reduces the a-variable of the constraint such that the constraint (arc) is consistent
         :param constraint:
@@ -214,11 +229,22 @@ class Solver:
         return change
 
     def solve(self):
+        """
+        Assigns values to all Variables, providing a solution to the puzzle
+        :return:
+        """
         for variable in self.variables:
             variable.set_val()
-        for constraint in self.constraints:
-            if not constraint.satisfied():
-                print("PROBLEM WITH " + str(constraint))
+        while len([constraint for constraint in self.constraints if not constraint.satisfied()]):
+            for constraint in self.constraints:
+                while not constraint.satisfied():
+                    constraint.a[0].set_val()
+        """
+        for variable in self.variables:
+            constraints = [constraint for constraint in self.constraints if constraint.contains(variable, pos='A')]
+            while any([not constraint.satisfied() for constraint in constraints]):
+                variable.set_val(constraints=constraints)
+        """
 
 
 class Wordlist(list):
@@ -234,7 +260,13 @@ class Wordlist(list):
 
 if __name__ == "__main__":
     s = Solver()
-    s.ac3()
+    start = time.time()
+    #s.ac3()
+    stop = time.time()
+    print('AC3 Time: ' + str(stop - start))
+    start = time.time()
     s.solve()
+    stop = time.time()
+    print('Solver Time: ' + str(stop - start))
     for var in Solver.variables:
         print(var)
